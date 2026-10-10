@@ -1,0 +1,4 @@
+chatterbox-tts
+setuptools<81
+soundfile
+huggingface_hub

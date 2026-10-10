@@ -1,0 +1,25 @@
+.venv/
+**/.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.kilo/
+.remember/
+.playwright-mcp/
+
+# models and weights
+experiments/chatterbox_telugu/models/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# personal voice recordings and generated audio
+*.wav
+*.mp3
+references/
+outputs/
+output/
+voices/
+experiments/chatterbox_telugu/outputs/
+experiments/chatterbox_telugu/.hf_cache/
