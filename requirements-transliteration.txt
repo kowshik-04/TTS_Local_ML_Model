@@ -1,0 +1,14 @@
+# Optional offline Romanized-Telugu transliteration (AI4Bharat IndicXlit RNN).
+#
+# AI4Bharat's PyPI metadata declares fairseq, but the RNN engine used by this
+# project does not import fairseq. fairseq 0.12.1 has no wheel for Python 3.11
+# and its sdist cannot build on current setuptools/pip. Install this file with
+# --no-deps, then install the small RNN runtime dependencies:
+#
+#   python -m pip install --no-deps -r requirements-transliteration.txt
+#   python -m pip install pydload pandas
+#
+# `make install-transliteration` does both. Without it, /v1/transliterate
+# returns an explicit `transliteration_unavailable` error; TTS/agent operation
+# is unaffected.
+ai4bharat-transliteration==1.1.3

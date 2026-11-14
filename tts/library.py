@@ -16,7 +16,7 @@ from tts.audio_utils import AudioValidationError, prepared_reference
 _PAIR_NAME = re.compile(r"^(?P<number>\d{2,})_(?P<slug>[^/\\]+)$")
 _SLUG_INVALID = re.compile(r"[^0-9A-Za-z_-]+")
 MAX_TRANSCRIPT_CHARS = 5_000
-MIN_SECONDS, MAX_SECONDS = 1.0, 60.0
+MIN_SECONDS, MAX_SECONDS = 1.0, 12.0
 
 
 class ReferenceError(ValueError):

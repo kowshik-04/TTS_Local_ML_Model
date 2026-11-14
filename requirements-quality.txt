@@ -1,0 +1,10 @@
+# Optional offline quality evaluation for eval/quality.py.
+#
+# Install the PyTorch build matching your machine first (see requirements-core.txt).
+# These packages are not needed to run the API, agent or Gradio apps, and the
+# quality script downloads its public model weights on first use.
+speechbrain>=1.0.0,<2.0.0
+faster-whisper>=1.1.0,<2.0.0
+# faster-whisper 1.2.1 still passes metadata_errors to av.open(), which was
+# removed in PyAV 19. Keep the optional evaluation environment reproducible.
+av>=11,<19

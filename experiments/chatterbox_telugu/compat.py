@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
+import shutil
+from tempfile import mkdtemp
 from typing import Iterator
 
 from safetensors import safe_open
@@ -29,6 +32,44 @@ _EXPECTED_TENSOR_SHAPES = {
     "cond_enc.spkr_enc.weight": (1024, 256),
     "cond_enc.emotion_adv_fc.weight": (1024, 1),
 }
+
+
+@contextmanager
+def loader_model_dir(
+    model_dir: str | Path,
+    *,
+    alias_filename: str = "t3_mtl23ls_v2.safetensors",
+) -> Iterator[Path]:
+    """Expose the Telugu checkpoint under the filename stock 0.1.7 expects.
+
+    ``ChatterboxMultilingualTTS.from_local`` in chatterbox-tts 0.1.7 accepts no
+    ``t3_model`` argument and hardcodes ``t3_mtl23ls_v2.safetensors``.  Newer or
+    patched builds may accept the filename directly.  A temporary directory of
+    symlinks keeps the downloaded model tree untouched while supporting both
+    interfaces.  The caller keeps this context open only for the load call;
+    the loaded model retains no file handles.
+    """
+    model_dir = Path(model_dir)
+    telugu_checkpoint = model_dir / EXPECTED_T3_MODEL
+    if not telugu_checkpoint.is_file():
+        yield model_dir
+        return
+    temporary = Path(mkdtemp(prefix="chatterbox-loader-"))
+    try:
+        for entry in model_dir.iterdir():
+            if not entry.is_file():
+                continue
+            target_name = (
+                alias_filename if entry.name == EXPECTED_T3_MODEL else entry.name
+            )
+            target = temporary / target_name
+            try:
+                os.symlink(entry, target)
+            except OSError:
+                shutil.copy2(entry, target)
+        yield temporary
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
 
 
 class CompatibilityError(RuntimeError):

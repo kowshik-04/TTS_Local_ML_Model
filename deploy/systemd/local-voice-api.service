@@ -1,0 +1,30 @@
+# Native Linux service example. Adjust the user, checkout path and venv.
+#   sudo cp deploy/systemd/local-voice-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now local-voice-api
+# Repeat with local-voice-agent.service.
+[Unit]
+Description=Local Voice Studio TTS API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=voicestudio
+Group=voicestudio
+WorkingDirectory=/srv/local-voice-studio
+EnvironmentFile=/srv/local-voice-studio/.env
+Environment=TTS_API_HOST=127.0.0.1
+Environment=TTS_API_PORT=8000
+ExecStart=/srv/local-voice-studio/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000 --proxy-headers
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/local-voice-studio/data /srv/local-voice-studio/cache /srv/local-voice-studio/outputs /srv/local-voice-studio/voices /srv/local-voice-studio/experiments/chatterbox_telugu/models
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

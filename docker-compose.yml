@@ -1,0 +1,80 @@
+# Single-host deployment: TTS API + voice agent.
+#
+#   1. cp .env.example .env  and set TTS_API_KEY / AGENT_TTS_API_KEY / AGENT_VOICE_ID
+#   2. docker compose run --rm api python -m tts.setup_models
+#   3. docker compose up -d --build
+#   4. open http://127.0.0.1:8001/
+#
+# For NVIDIA acceleration, add the GPU overlay:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#
+# This file intentionally does not expose the API or agent on a public interface.
+# Put a TLS reverse proxy in front of 8001 for remote access.
+services:
+  api:
+    build: .
+    image: local-voice-studio:latest
+    env_file:
+      - .env
+    environment:
+      TTS_API_HOST: 0.0.0.0
+      TTS_API_DB: /app/data/accounts.sqlite3
+    command:
+      - uvicorn
+      - api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache
+      - ./outputs:/app/outputs
+      - ./voices:/app/voices
+      - ./experiments/chatterbox_telugu/models:/app/experiments/chatterbox_telugu/models
+      - hf_models:/models/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  agent:
+    build: .
+    image: local-voice-studio:latest
+    env_file:
+      - .env
+    environment:
+      AGENT_HOST: 0.0.0.0
+      AGENT_TTS_URL: http://api:8000
+    command:
+      - uvicorn
+      - agent.server:create_app_from_env
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --proxy-headers
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - hf_models:/models/huggingface
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  hf_models:

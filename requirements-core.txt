@@ -1,0 +1,31 @@
+# Runtime shared by the TTS API, Gradio apps and inference core.
+#
+# Install a PyTorch build that matches the machine first when needed:
+#   Apple Silicon:  pip install torch==2.11.0 torchaudio==2.11.0
+#   NVIDIA Linux:   pip install --index-url https://download.pytorch.org/whl/cu128 \
+#                     torch==2.11.0 torchaudio==2.11.0
+# Then install this file; pip will see the existing torch build.
+torch==2.11.0
+torchaudio==2.11.0
+# torchaudio 2.11 delegates audio loading to TorchCodec. Pin a release
+# compatible with torch 2.11; without it F5-TTS fails at torchaudio.load()
+# before generation starts.
+torchcodec==0.16.0
+transformers==4.46.3
+huggingface_hub==0.36.2
+safetensors==0.8.0
+# IndicF5's model card installs its own F5-TTS fork from source. There is no
+# f5-tts 0.1.0 on PyPI, and the newer PyPI releases use a different checkpoint
+# loader. Pin the exact AI4Bharat source commit used by the IndicF5 integration.
+f5-tts @ git+https://github.com/AI4Bharat/IndicF5.git@13f7c4d627cc10111aea8fe9c0039462cacacdc7
+vocos==0.1.0
+numpy==1.26.4
+scipy==1.17.1
+soundfile==0.14.0
+# F5-TTS imports its training dataset module even for inference. Newer
+# datasets/pyarrow releases require NumPy 2.x and break the pinned NumPy 1.26
+# runtime with "pyarrow requires NumPy 2.0 or newer". Pin the last compatible
+# trio and keep the imports verifiable in the container.
+datasets==3.6.0
+pyarrow==17.0.0
+fsspec==2025.3.0

@@ -23,3 +23,29 @@ output/
 voices/
 experiments/chatterbox_telugu/outputs/
 experiments/chatterbox_telugu/.hf_cache/
+
+# local API accounts and runtime caches
+data/
+cache/
+eval/results/
+eval/quality-results/
+.cache/
+.env
+.env.*
+!.env.example
+
+# Python/build/test artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+build/
+dist/
+*.sqlite3
+*.db
+.gradio/
+gradio_cached_examples/
+flagged/

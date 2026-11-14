@@ -1,0 +1,27 @@
+[Unit]
+Description=Local Voice Studio real-time voice agent
+After=network-online.target local-voice-api.service
+Wants=network-online.target
+Requires=local-voice-api.service
+
+[Service]
+Type=simple
+User=voicestudio
+Group=voicestudio
+WorkingDirectory=/srv/local-voice-studio
+EnvironmentFile=/srv/local-voice-studio/.env
+Environment=AGENT_HOST=127.0.0.1
+Environment=AGENT_PORT=8001
+Environment=AGENT_TTS_URL=http://127.0.0.1:8000
+ExecStart=/srv/local-voice-studio/.venv/bin/uvicorn agent.server:create_app_from_env --factory --host 127.0.0.1 --port 8001 --proxy-headers
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/local-voice-studio/cache
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,12 +1,4 @@
+# Full local installation: inference core, HTTP API and Gradio apps.
+-r requirements-core.txt
+-r requirements-api.txt
 gradio==6.29.1
-numpy==1.26.4
-scipy==1.17.1
-soundfile==0.14.0
-torch==2.11.0
-torchaudio==2.11.0
-transformers==4.46.3
-huggingface_hub==0.36.2
-safetensors==0.8.0
-f5-tts==0.1.0
-vocos==0.1.0
-ai4bharat-transliteration==1.1.3

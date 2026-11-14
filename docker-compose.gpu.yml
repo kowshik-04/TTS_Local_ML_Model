@@ -1,0 +1,19 @@
+# NVIDIA GPU overlay. Requires Docker Engine + nvidia-container-toolkit and a
+# CUDA-capable driver. Do not use this overlay on Apple Silicon Docker Desktop.
+services:
+  api:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  agent:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -1,0 +1,90 @@
+# Example TLS reverse proxy for Local Voice Studio.
+#
+# Replace the certificate paths and hostnames. Terminate TLS here; keep the API
+# and agent bound to 127.0.0.1 (or an internal Docker network) behind it.
+#
+# The browser agent is served from the agent hostname. The TTS API uses a
+# separate hostname so /v1/tts and /v1/agent/ws cannot be confused by a path
+# prefix rewrite.
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name tts.example.com agent.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name tts.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/tts.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tts.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    client_max_body_size 30m;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Request-Id $request_id;
+
+    # Buffering off keeps raw PCM streaming end to end.
+    location /v1/tts/stream {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_buffering off;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        add_header X-Accel-Buffering no;
+    }
+
+    location /v1/tts/ws {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_read_timeout 600s;
+    }
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name agent.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/agent.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/agent.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # A WebSocket upgrade is required for the demo and agent protocol.
+    location /v1/agent/ws {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+}

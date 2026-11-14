@@ -12,9 +12,10 @@ import gradio as gr
 from tts.audio_utils import (
     AudioValidationError,
     clear_generated_outputs,
-    prepared_reference,
+    prepare_reference_cached,
     save_outputs,
 )
+from tts.config import Settings
 from tts.engine_router import (
     LANG_ENGLISH,
     LANG_MIXED,
@@ -22,8 +23,7 @@ from tts.engine_router import (
     LANG_TELUGU,
     EngineRouter,
 )
-from tts.text_normalizer import normalize_text
-from tts.transliteration import romanized_telugu_to_script
+from tts.service import SpeechRequest, TTSError, TTSService
 from tts.voice_styles import STYLE_DESCRIPTION
 
 
@@ -31,13 +31,15 @@ BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "outputs"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOGGER = logging.getLogger("local-voice-studio")
-ROUTER = EngineRouter()
+SETTINGS = Settings.from_env()
+ROUTER = EngineRouter(settings=SETTINGS)
+SERVICE = TTSService(SETTINGS, router=ROUTER)
 
 
 def _format_audio_info(info) -> str:
     warning_text = " ".join(info.warnings)
     return (
-        f"Valid reference: {info.duration_seconds:.1f}s, mono, "
+        f"Valid reference: {info.duration_seconds:.1f}s of aligned speech, mono, "
         f"{info.sample_rate:,} Hz."
         + (f" {warning_text}" if warning_text else "")
     )
@@ -49,22 +51,24 @@ def validate_reference(audio_path: str | None, transcript: str):
     if not transcript or not transcript.strip():
         return "Enter the words actually spoken in the reference recording."
     try:
-        with prepared_reference(audio_path) as (_working_copy, info):
-            return _format_audio_info(info)
+        _path, info = prepare_reference_cached(
+            audio_path,
+            SETTINGS.reference_cache_dir,
+            min_seconds=SETTINGS.min_reference_seconds,
+            max_seconds=SETTINGS.max_aligned_reference_seconds,
+        )
+        return _format_audio_info(info)
     except (AudioValidationError, OSError) as error:
         return f"Reference audio is not ready: {error}"
 
 
 def make_text_preview(language: str, text: str):
-    normalized = normalize_text(text)
-    if not normalized:
+    if not (text or "").strip():
         raise gr.Error("Enter text before creating a preview.")
     try:
-        if language == LANG_ROMANIZED:
-            normalized = romanized_telugu_to_script(normalized)
-    except (ValueError, RuntimeError) as error:
+        return SERVICE.preview(text, language)["normalized_text"]
+    except TTSError as error:
         raise gr.Error(str(error)) from error
-    return normalized
 
 
 def _clear_preview():
@@ -90,12 +94,12 @@ def generate_speech(
     if not reference_transcript or not reference_transcript.strip():
         raise gr.Error("Enter the transcript that matches the reference recording.")
     if language == LANG_ROMANIZED:
-        target_text = normalize_text(preview_text)
-        if not target_text:
+        text = (preview_text or "").strip()
+        if not text:
             raise gr.Error("Create and review the Telugu-script preview before generation.")
     else:
-        target_text = normalize_text(source_text)
-    if not target_text:
+        text = (source_text or "").strip()
+    if not text:
         raise gr.Error("Enter the text to synthesize.")
 
     started_at = time.perf_counter()
@@ -105,26 +109,34 @@ def generate_speech(
 
     try:
         progress(0, desc="Loading the local speech model")
-        engine_language = LANG_TELUGU if language == LANG_ROMANIZED else language
-        audio, sample_rate = ROUTER.generate(
-            engine_language,
-            reference_audio,
-            reference_transcript.strip(),
-            target_text,
+        result = SERVICE.synthesize(
+            SpeechRequest(
+                text=text,
+                language=language,
+                reference_path=reference_audio,
+                reference_transcript=reference_transcript.strip(),
+                reference_name="Gradio reference",
+            ),
             progress=update_progress,
         )
-        wav_path, mp3_path = save_outputs(audio, sample_rate, OUTPUT_DIR)
-    except (AudioValidationError, ValueError, RuntimeError, OSError) as error:
+        wav_path, mp3_path = save_outputs(result.audio, result.sample_rate, OUTPUT_DIR)
+    except (AudioValidationError, TTSError, ValueError, RuntimeError, OSError) as error:
         LOGGER.exception("Local speech generation failed")
         raise gr.Error(str(error)) from error
 
-    duration = len(audio) / sample_rate
+    duration = len(result.audio) / result.sample_rate
     elapsed = time.perf_counter() - started_at
+    warning_text = " ".join(result.warnings)
     status = (
-        f"Generated {duration:.1f}s of audio in {elapsed:.1f}s at {sample_rate:,} Hz. "
+        f"Generated {duration:.1f}s of audio in {elapsed:.1f}s at "
+        f"{result.sample_rate:,} Hz with {result.engine} ({SETTINGS.profile} profile). "
         "WAV is PCM 24-bit; MP3 is 192 kbps (lossy). "
         "Mixed-language pronunciation is experimental and has not been quality-certified."
     )
+    if result.cache_hit:
+        status += " Exact cached audio was reused."
+    if warning_text:
+        status += f" Notes: {warning_text}"
     return str(wav_path), str(mp3_path), str(wav_path), status
 
 
@@ -143,10 +155,12 @@ processed on this Mac; no preset speakers, cloud TTS, or remote fallback are use
 Only clone a voice you own or have permission to use.
 
 **Validated engine:** AI4Bharat IndicF5 for Telugu with custom reference audio.
-English-only custom-voice synthesis is not enabled because a suitable local engine
-has not been validated. Telugu-English code-switching can be attempted, but English
-pronunciation and cross-language speaker similarity are experimental. Romanized
-Telugu uses an offline IndicXlit preview; informal spellings can be ambiguous.
+Reference clips are capped at 12 seconds after silence trimming so the model cannot
+silently clip audio while retaining the full transcript. English-only custom-voice
+synthesis is not enabled because a suitable local engine has not been validated.
+Telugu-English code-switching can be attempted, but English pronunciation and
+cross-language speaker similarity are experimental. Romanized Telugu uses an offline
+IndicXlit preview; informal spellings can be ambiguous.
 """
 
 
@@ -170,8 +184,8 @@ with gr.Blocks(title="Local Multilingual Voice Studio") as demo:
             )
         gr.Markdown(
             "**Recording tips:** Use a quiet room, speak clearly and naturally, avoid music, "
-            "echo and clipping, and read the transcript exactly as spoken. A clear 10–15 second "
-            "sample is recommended. The model may trim longer references."
+            "echo and clipping, and read the transcript exactly as spoken. Record 8–12 seconds "
+            "of speech. Longer clips are rejected instead of being silently clipped."
         )
         gr.Markdown(
             "**Suggested Telugu script (edit the transcript to match what you said):**\n\n"

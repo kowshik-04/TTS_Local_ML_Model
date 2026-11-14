@@ -30,8 +30,8 @@ def _indicxlit_model_dirs() -> tuple[Path, Path]:
     spec = importlib.util.find_spec("ai4bharat.transliteration")
     if spec is None or not spec.submodule_search_locations:
         raise RuntimeError(
-            "Romanized Telugu conversion requires ai4bharat-transliteration. "
-            "Install requirements.txt and run `python -m tts.setup_models`."
+            "Romanized Telugu conversion requires the optional IndicXlit package. "
+            "Run `make install-transliteration` and `python -m tts.setup_models`."
         )
     package_dir = Path(next(iter(spec.submodule_search_locations))) / "rnn"
     package_models = package_dir / "models" / "v0.5"
@@ -63,8 +63,8 @@ def _get_engine(allow_download: bool = False):
         from ai4bharat.transliteration import XlitEngine
     except ImportError as error:
         raise RuntimeError(
-            "Romanized Telugu conversion needs the offline IndicXlit package. "
-            "Install project dependencies and run `python -m tts.setup_models` once while online."
+            "Romanized Telugu conversion needs the optional offline IndicXlit package. "
+            "Run `make install-transliteration` and `python -m tts.setup_models` once while online."
         ) from error
     return XlitEngine("te", beam_width=6, rescore=False, model_type="rnn")
 

@@ -1,0 +1,13 @@
+# Voice-agent process. It talks to the TTS API over HTTP/WebSocket and does not
+# import torch, so it can run on a small CPU host next to the GPU worker.
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
+httpx==0.28.1
+numpy==1.26.4
+scipy==1.17.1
+soundfile==0.14.0
+# Local speech-to-text. Omit if AGENT_STT_PROVIDER=openai.
+faster-whisper>=1.1.0,<2.0.0
+# faster-whisper 1.2.1 passes metadata_errors to av.open(); PyAV 19 removed it.
+av>=11,<19

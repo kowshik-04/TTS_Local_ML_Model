@@ -15,12 +15,13 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 import gradio as gr
 
-from tts.audio_utils import AudioValidationError, prepared_reference, save_outputs
+from tts.audio_utils import AudioValidationError, save_outputs
+from tts.config import Settings
 from tts.engine_router import LANG_MIXED, LANG_ROMANIZED, LANG_TELUGU, EngineRouter
 from tts.health import collect_health
 from tts.history import delete_item, discover_history, write_metadata
 from tts.library import ReferenceError, discover_references, file_sha256, save_reference
-from tts.text_normalizer import normalize_text
+from tts.service import SpeechRequest, TTSError, TTSService
 from tts.transliteration import romanized_telugu_to_script
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -29,7 +30,9 @@ REFERENCE_DIR = BASE_DIR / "references"
 CSS = (BASE_DIR / "static" / "voice_lab.css").read_text(encoding="utf-8")
 MODES = [LANG_TELUGU, LANG_MIXED, LANG_ROMANIZED]
 MAX_CHARS = 2000
-ROUTER = EngineRouter()
+SETTINGS = Settings.from_env()
+ROUTER = EngineRouter(settings=SETTINGS)
+SERVICE = TTSService(SETTINGS, router=ROUTER)
 esc = html.escape
 
 
@@ -105,7 +108,8 @@ def _result_html(meta: dict) -> str:
     stats = "".join(
         f'<div class="vl-stat">{k}<b>{esc(str(v))}</b></div>'
         for k, v in [("Duration", f"{meta['duration_seconds']:.2f}s"), ("Sample rate", f"{meta['sample_rate']} Hz"),
-                     ("Generated in", f"{meta['generation_seconds']:.1f}s"), ("Mode", meta["mode"])]
+                     ("Generated in", f"{meta['generation_seconds']:.1f}s"), ("Engine", meta.get("engine", "IndicF5")),
+                     ("Cache", "hit" if meta.get("cache_hit") else "miss"), ("Mode", meta["mode"])]
     )
     return (f'<div class="vl-stats">{stats}</div><div class="vl-note">Spoken text:</div>'
             f'<div class="vl-item telugu-text">{esc(meta["text"])}</div>'
@@ -131,27 +135,32 @@ def generate(mode, source_text, preview_text, ref_stem, ref_audio, ref_text, pro
         spoken, route_mode = preview_text, LANG_TELUGU
     else:
         spoken, route_mode = source_text, mode
-    target = normalize_text(spoken)
-    if not target.strip():
-        raise gr.Error("Nothing speakable remained after normalization.")
     ref_info = _refs().get(ref_stem)
     ref_path = Path(ref_audio)
     from_library = ref_info is not None and ref_info.wav_path.resolve() == ref_path.resolve()
     try:
         started = time.perf_counter()
-        with prepared_reference(ref_path) as (prepared, _info):
-            audio, rate = ROUTER.generate(route_mode, str(prepared), ref_text.strip(), target,
-                                          progress=lambda c, t: progress(c / max(t, 1), desc=f"Chunk {c}/{t}"))
+        result = SERVICE.synthesize(
+            SpeechRequest(
+                text=spoken,
+                language=route_mode,
+                reference_path=str(ref_path),
+                reference_transcript=ref_text.strip(),
+                reference_name=ref_info.label if from_library else "Custom upload",
+            ),
+            progress=lambda c, t: progress(c / max(t, 1), desc=f"Chunk {c}/{t}"),
+        )
         elapsed = time.perf_counter() - started
-        wav, mp3 = save_outputs(audio, rate, OUTPUT_DIR)
-    except (AudioValidationError, ValueError, RuntimeError) as exc:
+        wav, mp3 = save_outputs(result.audio, result.sample_rate, OUTPUT_DIR)
+    except (AudioValidationError, TTSError, ValueError, RuntimeError) as exc:
         raise gr.Error(str(exc)) from exc
     meta = {
-        "created_at": datetime.now().isoformat(timespec="seconds"), "mode": mode, "text": target,
+        "created_at": datetime.now().isoformat(timespec="seconds"), "mode": mode, "text": result.normalized_text,
         "source_text": source_text, "reference_name": ref_info.label if from_library else "Custom upload",
         "reference_sha256": file_sha256(ref_path), "reference_transcript": ref_text.strip(),
-        "engine": "IndicF5", "sample_rate": rate, "duration_seconds": len(audio) / rate,
-        "generation_seconds": elapsed,
+        "engine": result.engine, "sample_rate": result.sample_rate,
+        "duration_seconds": len(result.audio) / result.sample_rate,
+        "generation_seconds": elapsed, "cache_hit": result.cache_hit,
     }
     write_metadata(wav, meta)
     return str(wav), str(wav), str(mp3), _result_html(meta), header_html()
@@ -249,8 +258,9 @@ ABOUT = """
 **Telugu Voice Lab** wraps the local IndicF5 model. Delivery and timbre follow your reference recording;
 there is no emotion control. Quality is not guaranteed — judge by listening.
 
-* English-only synthesis is **not supported** (no validated local engine).
+* English-only synthesis is **not enabled** unless the optional, experimental Chatterbox-Telugu engine is installed.
 * Telugu + English is experimental. Romanized Telugu relies on offline transliteration that may be ambiguous.
+* Reference clips are limited to 12 seconds of aligned speech because IndicF5 clips longer audio while keeping the transcript.
 * Legacy files in `outputs/` and all reference files are never modified; only items created by this app can be deleted.
 """
 
@@ -295,7 +305,7 @@ def build() -> gr.Blocks:
                         ref_prev_text = gr.Textbox(label="Transcript", interactive=False, lines=3)
                 with gr.Accordion("Save a new reference", open=False, elem_classes="vl-card"):
                     new_name = gr.Textbox(label="Name")
-                    new_audio = gr.Audio(label="Clean recording (one speaker, 3–30 s)", type="filepath",
+                    new_audio = gr.Audio(label="Clean recording (one speaker, 3–12 s)", type="filepath",
                                          sources=["upload", "microphone"])
                     new_text = gr.Textbox(label="Exact transcript", lines=3)
                     save_btn = gr.Button("Save reference (never overwrites existing ones)")

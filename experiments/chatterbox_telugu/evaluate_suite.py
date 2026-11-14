@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import os
 from pathlib import Path
@@ -109,7 +110,7 @@ def run_worker(engine_name: str, manifest_path: Path, run_dir: Path, device: str
     if engine_name == "chatterbox":
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS, punc_norm
 
-        from compat import EXPECTED_T3_MODEL, compatibility_scope
+        from compat import EXPECTED_T3_MODEL, compatibility_scope, loader_model_dir
 
         if device == "auto":
             torch = __import__("torch")
@@ -128,11 +129,14 @@ def run_worker(engine_name: str, manifest_path: Path, run_dir: Path, device: str
     model_load_started = time.perf_counter()
     if engine_name == "chatterbox":
         with model_context:
-            model = ChatterboxMultilingualTTS.from_local(
-                ROOT / "models" / "chatterbox-telugu",
-                device=actual_device,
-                t3_model=EXPECTED_T3_MODEL,
-            )
+            parameters = inspect.signature(
+                ChatterboxMultilingualTTS.from_local
+            ).parameters
+            kwargs = {"device": actual_device}
+            if "t3_model" in parameters:
+                kwargs["t3_model"] = EXPECTED_T3_MODEL
+            with loader_model_dir(ROOT / "models" / "chatterbox-telugu") as loader_dir:
+                model = ChatterboxMultilingualTTS.from_local(loader_dir, **kwargs)
             _run_cases(
                 cases,
                 engine_name,
