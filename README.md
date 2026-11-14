@@ -24,6 +24,65 @@ used. A voice must be explicitly enrolled with consent.
 
 ## One-command setup and launch
 
+### Windows 10/11 (x64) — recommended
+
+Windows uses the root [`run.bat`](run.bat) and [`run.ps1`](run.ps1) launchers.
+No WSL2 is required. Prerequisites:
+
+- 64-bit Python 3.11 or 3.12 (the python.org installer with the `py` launcher is
+  the simplest option);
+- [Git for Windows](https://git-scm.com/download/win) (the pinned IndicF5 source
+  package is installed from Git);
+- an NVIDIA driver if you want CUDA (optional; CPU inference works);
+- a Hugging Face account with access to gated IndicF5.
+
+Double-click [`run.bat`](run.bat), or run this from PowerShell:
+
+```powershell
+$env:HF_TOKEN = "hf_..."          # one-time gated-model access; see below
+.\run.ps1
+```
+
+`run.bat` calls `run.ps1` with a per-process ExecutionPolicy bypass. If you
+prefer to bypass a blocked script policy explicitly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run.ps1
+```
+
+The launcher:
+
+1. validates Windows x64 and finds Python 3.11/3.12;
+2. creates or reuses `.venv`;
+3. installs the **shared** FFmpeg build (not just `ffmpeg.exe`) with `winget` or
+   Chocolatey when it is missing, because TorchCodec needs the DLLs;
+4. installs CUDA PyTorch when `nvidia-smi` reports a working NVIDIA GPU,
+   otherwise CPU PyTorch;
+5. installs the pinned Python dependencies;
+6. downloads and caches IndicF5 + Vocos (about 1.5 GB on the first run);
+7. starts the Voice Lab at <http://127.0.0.1:7860>.
+
+Useful PowerShell variants:
+
+```powershell
+.\run.ps1 -SetupOnly          # install and cache, but do not start the UI
+.\run.ps1 -NoBrowser          # headless/SSH; print the local URL instead
+.\run.ps1 -SkipInstall        # reuse an existing .venv
+.\run.ps1 -SkipModels         # reuse already-cached weights
+.\run.ps1 -Port 7861          # use another port
+.\run.ps1 -Device cpu         # force CPU; default is auto (CUDA/CPU)
+.\run.ps1 -Help               # show all options
+```
+
+The same flags can be passed through `run.bat`, for example
+`run.bat -SetupOnly`. If `winget` is unavailable, install the shared FFmpeg
+build manually with
+`winget install --id Gyan.FFmpeg.Shared -e` from a machine with App Installer,
+or `choco install ffmpeg-shared -y`, then rerun the launcher. Static FFmpeg
+packages do not include the DLLs TorchCodec needs on Windows.
+
+### macOS and Linux
+
 On macOS (Apple Silicon) or Linux, the root [`run.sh`](run.sh) script performs
 the installation, caches the model weights and starts the Telugu Voice Lab:
 
@@ -53,21 +112,33 @@ Useful variants:
 
 ### Required one-time model access
 
-The `ai4bharat/IndicF5` repository is gated. The script does not bypass that
+The `ai4bharat/IndicF5` repository is gated. The launchers do not bypass that
 gate:
 
 1. Sign in at <https://huggingface.co/ai4bharat/IndicF5>.
 2. Accept the model terms.
-3. Export `HF_TOKEN`, or log in once with `hf auth login` /
+3. Provide `HF_TOKEN`, or log in once with `hf auth login` /
    `huggingface-cli login`.
 
-After the weights are cached, the app runs offline and the token is not needed
-for inference. `run.sh --skip-models` starts from an existing cache.
+```powershell
+# Windows PowerShell
+$env:HF_TOKEN = "hf_..."
+```
 
-The script expects Python 3.11 or 3.12, Git and FFmpeg. It can install FFmpeg
+```bash
+# macOS/Linux
+export HF_TOKEN=hf_...
+```
+
+After the weights are cached, the app runs offline and the token is not needed
+for inference. Use `.\run.ps1 -SkipModels` on Windows or
+`./run.sh --skip-models` on macOS/Linux to start from an existing cache.
+
+The launchers expect Python 3.11 or 3.12 and Git. `run.sh` can install FFmpeg
 with Homebrew on macOS, and on Debian/Ubuntu it installs it automatically when
 run as root or with passwordless `sudo`; otherwise it prints the exact command.
-Windows is not natively supported; run the script inside WSL2.
+The Windows launcher attempts `winget`/Chocolatey and otherwise prints the exact
+command.
 
 This gets the application running without manual installation steps, but voice
 cloning still requires a 3–12 second reference recording and its **exact**
@@ -90,6 +161,7 @@ This repository is honest about the boundary between engineering and quality:
 | Romanized Telugu | Offline IndicXlit preview, always shown for review; spelling is ambiguous. |
 | Speed/latency claims | Only what `eval/benchmark.py` measures on your machine. No claim is made from this checkout because model weights are intentionally not bundled. |
 | Speaker similarity / naturalness | Requires human listening. The benchmark writes a review template; it does not invent scores. |
+| Windows launcher | CPU/CUDA wheel selection, FFmpeg bootstrap and the PowerShell entry point are implemented. The recorded end-to-end run in this checkout was on Apple Silicon; repeat the smoke generation on the target Windows machine. |
 
 The original IndicF5 baseline was previously exercised on Apple Silicon with MPS.
 That is not a guarantee for a different model revision, reference recording,
@@ -647,7 +719,8 @@ local STT.
 | Symptom | Likely cause |
 |---|---|
 | `401 GatedRepo` / model download fails | Accept the IndicF5 terms and set `HF_TOKEN`. |
-| `ffmpeg is required` | Install FFmpeg and restart the process. |
+| `ffmpeg is required` | Install FFmpeg and restart the process. On Windows install the **shared** build: `winget install --id Gyan.FFmpeg.Shared -e`; on macOS: `brew install ffmpeg`. |
+| `run.ps1 cannot be loaded because running scripts is disabled` | Double-click `run.bat`, or run `powershell -ExecutionPolicy Bypass -File .\run.ps1`. |
 | `English-only custom-voice synthesis is not enabled` | Expected unless `TTS_ENABLE_CHATTERBOX=1`; enabling Chatterbox makes `engine=auto` use it for English. |
 | `engine_initialization_failed` | The selected engine could not load: missing/gated weights, a missing dependency, or an invalid model path. No fallback is attempted. |
 | `engine_unavailable` for mixed text | The selected engine is disabled or does not support mixed text. Under `auto`, mixed text now uses IndicF5; explicitly request `engine=chatterbox` to A/B test it. |
@@ -672,7 +745,9 @@ tts/                 Inference core, service, voice store, cache, frontends
 eval/                Fixed corpus and technical benchmark harness
 deploy/              nginx and systemd examples
 tests/               Dependency-light unit/integration tests with fakes
-run.sh               One-command install, model cache and Voice Lab launcher
+run.sh               One-command install, model cache and Voice Lab launcher (macOS/Linux)
+run.ps1              One-command install, model cache and Voice Lab launcher (Windows)
+run.bat              Double-click/ExecutionPolicy-safe Windows wrapper for run.ps1
 app.py               Simple Gradio studio
 voice_lab_app.py     Voice Lab Gradio studio
 Dockerfile           API + agent image

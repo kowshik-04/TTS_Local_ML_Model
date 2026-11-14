@@ -1,0 +1,62 @@
+name: Windows launcher
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  syntax-and-help:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Parse run.ps1
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "run.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object {
+              Write-Host "line $($_.Extent.StartLineNumber): $($_.Message)"
+            }
+            exit 1
+          }
+          Write-Host "run.ps1 parses cleanly."
+
+      - name: Check PowerShell help
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check run.bat wrapper
+        shell: cmd
+        run: run.bat -Help
+
+  runtime-smoke:
+    # This job installs the full CPU runtime but skips the gated model weights.
+    # Trigger it manually from the Actions tab (workflow_dispatch).
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime without gated weights
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -SetupOnly -SkipModels
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

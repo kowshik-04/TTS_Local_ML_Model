@@ -76,7 +76,8 @@ def _ffmpeg() -> str:
     if ffmpeg is None:
         raise AudioValidationError(
             "FFmpeg is required to decode audio and export MP3/Opus. "
-            "Install it with `brew install ffmpeg` (macOS) or your package manager, then restart."
+            "Install it with `brew install ffmpeg` (macOS), your Linux package manager, "
+            "or `winget install --id Gyan.FFmpeg.Shared -e` (Windows; shared build), then restart."
         )
     return ffmpeg
 

@@ -101,7 +101,7 @@ case "$OS" in
             *) die "Unsupported Linux architecture: $ARCH" ;;
         esac ;;
     *)
-        die "This launcher supports macOS and Linux. On Windows, use WSL2 and run it inside the Linux environment." ;;
+        die "This launcher supports macOS and Linux. On Windows, run run.bat or .\\run.ps1 instead." ;;
 esac
 
 command -v git >/dev/null 2>&1 || die "git is required to install the pinned IndicF5/F5-TTS source package."

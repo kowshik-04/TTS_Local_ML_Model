@@ -9,7 +9,8 @@ torch==2.11.0
 torchaudio==2.11.0
 # torchaudio 2.11 delegates audio loading to TorchCodec. Pin a release
 # compatible with torch 2.11; without it F5-TTS fails at torchaudio.load()
-# before generation starts.
+# before generation starts. On Windows, TorchCodec needs the FFmpeg **shared**
+# build (DLLs); run.ps1 installs/checks Gyan.FFmpeg.Shared.
 torchcodec==0.16.0
 transformers==4.46.3
 huggingface_hub==0.36.2
