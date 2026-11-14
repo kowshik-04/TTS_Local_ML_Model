@@ -31,18 +31,24 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ffmpeg libsndfile1 libgomp1 curl git tini \
+        ffmpeg libsndfile1 libgomp1 libheif1 curl git tini \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Install the accelerator-matched PyTorch wheel first. requirements.txt then
 # sees torch/torchaudio as already satisfied instead of pulling a second wheel.
+#
+# TorchCodec's default Linux wheel is built with CUDA 13 image kernels and fails
+# to load on a CPU-only image with "libnvrtc.so.13". This project only uses
+# TorchCodec for audio decoding, so install the CPU wheel for both image types.
 COPY requirements-core.txt requirements-api.txt requirements.txt ./
 # hadolint ignore=DL3013
 RUN python -m pip install --upgrade pip \
     && python -m pip install --index-url "${TORCH_INDEX_URL}" \
         torch==2.11.0 torchaudio==2.11.0 \
+    && python -m pip install --index-url https://download.pytorch.org/whl/cpu \
+        torchcodec==0.16.0 \
     && python -m pip install -r requirements.txt \
     && python -m pip check
 
