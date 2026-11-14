@@ -1,4 +1,8 @@
 # Full local installation: inference core, HTTP API and Gradio apps.
 -r requirements-core.txt
 -r requirements-api.txt
-gradio==6.29.1
+# Gradio 5.50 is the newest 5.x release compatible with
+# huggingface_hub==0.36.2.  Gradio 6 requires huggingface-hub>=1.16, while the
+# pinned Transformers 4.46.3 requires huggingface-hub<1.0; do not bump this
+# until the F5/Transformers stack supports the newer hub.
+gradio==5.50.0

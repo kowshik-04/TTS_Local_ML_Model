@@ -164,7 +164,7 @@ IndicXlit preview; informal spellings can be ambiguous.
 """
 
 
-with gr.Blocks(title="Local Multilingual Voice Studio") as demo:
+with gr.Blocks(title="Local Multilingual Voice Studio", theme=gr.themes.Soft()) as demo:
     gr.Markdown("# Local Voice Studio")
     gr.Markdown(DESCRIPTION)
 
@@ -267,5 +267,4 @@ if __name__ == "__main__":
         server_name="127.0.0.1",
         share=False,
         inbrowser=True,
-        theme=gr.themes.Soft(),
     )

@@ -266,7 +266,10 @@ there is no emotion control. Quality is not guaranteed — judge by listening.
 
 
 def build() -> gr.Blocks:
-    with gr.Blocks(title="Telugu Voice Lab") as demo:
+    theme = gr.themes.Base(primary_hue="violet", neutral_hue="slate").set(
+        body_background_fill="#0e1015", body_text_color="#eceef5"
+    )
+    with gr.Blocks(title="Telugu Voice Lab", css=CSS, theme=theme) as demo:
         header = gr.HTML(header_html())
         with gr.Tabs():
             with gr.Tab("Studio"):
@@ -348,8 +351,9 @@ def build() -> gr.Blocks:
 
 if __name__ == "__main__":
     build().queue(default_concurrency_limit=1).launch(
-        server_name="127.0.0.1", server_port=int(os.environ.get("VOICE_LAB_PORT", "7860")), share=False, inbrowser=os.environ.get("VOICE_LAB_NO_BROWSER") is None,
-        css=CSS, theme=gr.themes.Base(primary_hue="violet", neutral_hue="slate").set(
-            body_background_fill="#0e1015", body_text_color="#eceef5"),
+        server_name="127.0.0.1",
+        server_port=int(os.environ.get("VOICE_LAB_PORT", "7860")),
+        share=False,
+        inbrowser=os.environ.get("VOICE_LAB_NO_BROWSER") is None,
         allowed_paths=[str(OUTPUT_DIR), str(REFERENCE_DIR)],
     )

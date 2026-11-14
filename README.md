@@ -22,6 +22,61 @@ used. A voice must be explicitly enrolled with consent.
 
 ---
 
+## One-command setup and launch
+
+On macOS (Apple Silicon) or Linux, the root [`run.sh`](run.sh) script performs
+the installation, caches the model weights and starts the Telugu Voice Lab:
+
+```bash
+export HF_TOKEN=hf_...          # one-time gated-model access; see below
+./run.sh
+```
+
+The script:
+
+1. creates or reuses `.venv`;
+2. installs the pinned PyTorch and Python dependencies, selecting CPU PyTorch
+   on machines without an NVIDIA GPU and CUDA PyTorch when `nvidia-smi` works;
+3. downloads and caches IndicF5 + Vocos (about 1.5 GB on the first run);
+4. starts the Voice Lab at <http://127.0.0.1:7860>.
+
+Useful variants:
+
+```bash
+./run.sh --setup-only          # install and cache, but do not start the UI
+./run.sh --no-browser          # headless/SSH; print the local URL instead
+./run.sh --skip-install        # reuse an existing .venv
+./run.sh --skip-models         # reuse already-cached weights
+./run.sh --port 7861           # use another port
+./run.sh --device cpu          # force CPU; default is auto (MPS/CUDA/CPU)
+```
+
+### Required one-time model access
+
+The `ai4bharat/IndicF5` repository is gated. The script does not bypass that
+gate:
+
+1. Sign in at <https://huggingface.co/ai4bharat/IndicF5>.
+2. Accept the model terms.
+3. Export `HF_TOKEN`, or log in once with `hf auth login` /
+   `huggingface-cli login`.
+
+After the weights are cached, the app runs offline and the token is not needed
+for inference. `run.sh --skip-models` starts from an existing cache.
+
+The script expects Python 3.11 or 3.12, Git and FFmpeg. It can install FFmpeg
+with Homebrew on macOS, and on Debian/Ubuntu it installs it automatically when
+run as root or with passwordless `sudo`; otherwise it prints the exact command.
+Windows is not natively supported; run the script inside WSL2.
+
+This gets the application running without manual installation steps, but voice
+cloning still requires a 3–12 second reference recording and its **exact**
+transcript. The repository does not ship a preset or synthetic human voice.
+Optional Romanized-Telugu input needs the separate `make install-transliteration`
+step; core Telugu/Tenglish synthesis does not.
+
+---
+
 ## What is actually validated
 
 This repository is honest about the boundary between engineering and quality:
@@ -617,6 +672,7 @@ tts/                 Inference core, service, voice store, cache, frontends
 eval/                Fixed corpus and technical benchmark harness
 deploy/              nginx and systemd examples
 tests/               Dependency-light unit/integration tests with fakes
+run.sh               One-command install, model cache and Voice Lab launcher
 app.py               Simple Gradio studio
 voice_lab_app.py     Voice Lab Gradio studio
 Dockerfile           API + agent image
