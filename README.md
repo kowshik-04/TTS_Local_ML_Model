@@ -224,6 +224,7 @@ This repository is honest about the boundary between engineering and quality:
 | Speed/latency claims | Only what `eval/benchmark.py` measures on your machine. No claim is made from this checkout because model weights are intentionally not bundled. |
 | Speaker similarity / naturalness | Requires human listening. The benchmark writes a review template; it does not invent scores. |
 | Windows launcher | CPU/CUDA wheel selection, FFmpeg bootstrap and the PowerShell entry point are implemented. The recorded end-to-end run in this checkout was on Apple Silicon; repeat the smoke generation on the target Windows machine. |
+| Docker Voice Lab image | The CPU image builds on Ubuntu, installs the CPU TorchCodec wheel, verifies WAV decoding through FFmpeg, and starts the Gradio UI without gated weights in the manual `Voice Lab Docker image` workflow. Gated-model download and actual generation still require a token and a target-machine run. The CUDA overlay is not exercised by CI. |
 
 The original IndicF5 baseline was previously exercised on Apple Silicon with MPS.
 That is not a guarantee for a different model revision, reference recording,
