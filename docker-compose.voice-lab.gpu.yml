@@ -1,0 +1,27 @@
+# NVIDIA GPU overlay for the Telugu Voice Lab image.
+#
+# Builds a CUDA 12.8 PyTorch image and requests the NVIDIA Docker runtime:
+#   docker compose -f docker-compose.voice-lab.yml \
+#     -f docker-compose.voice-lab.gpu.yml up --build
+#
+# This requires a current NVIDIA driver and NVIDIA container support in Docker
+# (Linux nvidia-container-toolkit, or Docker Desktop with WSL2 GPU support).
+# It will fail explicitly if no NVIDIA device is available; use the CPU-only
+# base compose file otherwise.
+services:
+  voice-lab:
+    build:
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
+    image: local-voice-studio:voice-lab-cuda
+    environment:
+      TTS_DEVICE: cuda
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -24,7 +24,66 @@ used. A voice must be explicitly enrolled with consent.
 
 ## One-command setup and launch
 
-### Windows 10/11 (x64) — recommended
+### Docker — Windows, macOS or Linux (recommended)
+
+The Voice Lab has its own container image, [`Dockerfile.voice-lab`](Dockerfile.voice-lab).
+Use Docker Desktop on Windows or macOS, or Docker Engine on Linux. No local
+Python, FFmpeg or CUDA toolkit is needed; the container installs its own runtime
+and the entrypoint downloads the gated model on first start.
+
+Windows PowerShell:
+
+```powershell
+$env:HF_TOKEN = "hf_..."          # one-time gated-model access; see below
+docker compose -f docker-compose.voice-lab.yml up --build
+```
+
+macOS/Linux:
+
+```bash
+export HF_TOKEN=hf_...            # one-time gated-model access; see below
+docker compose -f docker-compose.voice-lab.yml up --build
+```
+
+Open <http://127.0.0.1:7860>. The first build/start downloads the Python
+runtime and then IndicF5 + Vocos (about 1.5 GB for the weights). The token is
+only required until the weights are cached. The model cache, references,
+generated audio and history are named Docker volumes, so later starts are:
+
+```powershell
+docker compose -f docker-compose.voice-lab.yml up
+```
+
+PowerShell notes:
+
+- Docker Desktop must be running; use **Linux containers**, which is the
+  default.
+- Allow at least 8 GB of free disk space and, for CPU inference, ample RAM.
+- The default image is CPU-only. If you have a working NVIDIA GPU and Docker
+  GPU support, build the CUDA variant:
+
+```powershell
+docker compose -f docker-compose.voice-lab.yml `
+  -f docker-compose.voice-lab.gpu.yml up --build
+```
+
+- If port 7860 is busy, set another host port before starting:
+
+```powershell
+$env:VOICE_LAB_PORT = "7861"
+docker compose -f docker-compose.voice-lab.yml up
+```
+
+- Stop with `Ctrl+C` (or `docker compose -f docker-compose.voice-lab.yml down`).
+  `down` keeps the volumes; `down -v` deletes the cached weights and Voice Lab
+  data.
+- `HF_TOKEN` is passed to the container only at runtime and is not baked into
+  the image. You can also put `HF_TOKEN=hf_...` in a local, git-ignored `.env`
+  file; Docker Compose reads it automatically.
+
+If Docker is not available, use the native Windows path below.
+
+### Windows 10/11 (x64) — native, no Docker
 
 Windows uses the root [`run.bat`](run.bat) and [`run.ps1`](run.ps1) launchers.
 No WSL2 is required. Prerequisites:
@@ -112,8 +171,8 @@ Useful variants:
 
 ### Required one-time model access
 
-The `ai4bharat/IndicF5` repository is gated. The launchers do not bypass that
-gate:
+The `ai4bharat/IndicF5` repository is gated. The native launchers and the Docker
+entrypoint do not bypass that gate:
 
 1. Sign in at <https://huggingface.co/ai4bharat/IndicF5>.
 2. Accept the model terms.
@@ -131,14 +190,17 @@ export HF_TOKEN=hf_...
 ```
 
 After the weights are cached, the app runs offline and the token is not needed
-for inference. Use `.\run.ps1 -SkipModels` on Windows or
-`./run.sh --skip-models` on macOS/Linux to start from an existing cache.
+for inference. Use `.\run.ps1 -SkipModels` on Windows, or
+`./run.sh --skip-models` on macOS/Linux, to start from an existing cache. Docker
+skips the download automatically once the `hf_models` volume contains the
+weights; use `VOICE_LAB_FORCE_MODELS=1` to force a re-check/redownload.
 
-The launchers expect Python 3.11 or 3.12 and Git. `run.sh` can install FFmpeg
-with Homebrew on macOS, and on Debian/Ubuntu it installs it automatically when
-run as root or with passwordless `sudo`; otherwise it prints the exact command.
-The Windows launcher attempts `winget`/Chocolatey and otherwise prints the exact
-command.
+The native launchers expect Python 3.11 or 3.12 and Git. `run.sh` can install
+FFmpeg with Homebrew on macOS, and on Debian/Ubuntu it installs it automatically
+when run as root or with passwordless `sudo`; otherwise it prints the exact
+command. The Windows launcher attempts `winget`/Chocolatey and otherwise prints
+the exact command. The Docker path only requires Docker and Git (to clone the
+repository).
 
 This gets the application running without manual installation steps, but voice
 cloning still requires a 3–12 second reference recording and its **exact**
@@ -402,7 +464,10 @@ Native services are provided in `deploy/systemd/`; adjust user/path/venv first.
 
 ---
 
-## Docker
+## Docker — API and agent
+
+This section is for the HTTP API and voice-agent stack. The browser Voice Lab
+has its own image and separate one-command workflow at the top of the README.
 
 ```bash
 cp .env.example .env
@@ -718,9 +783,12 @@ local STT.
 
 | Symptom | Likely cause |
 |---|---|
-| `401 GatedRepo` / model download fails | Accept the IndicF5 terms and set `HF_TOKEN`. |
-| `ffmpeg is required` | Install FFmpeg and restart the process. On Windows install the **shared** build: `winget install --id Gyan.FFmpeg.Shared -e`; on macOS: `brew install ffmpeg`. |
+| `401 GatedRepo` / model download fails | Accept the IndicF5 terms and set `HF_TOKEN`. For Docker, pass `HF_TOKEN` to `docker compose` and check `docker compose ... logs`. |
+| `ffmpeg is required` | Install FFmpeg and restart the process. On Windows install the **shared** build: `winget install --id Gyan.FFmpeg.Shared -e`; on macOS: `brew install ffmpeg`. Docker installs FFmpeg in the image. |
 | `run.ps1 cannot be loaded because running scripts is disabled` | Double-click `run.bat`, or run `powershell -ExecutionPolicy Bypass -File .\run.ps1`. |
+| Docker says port 7860 is already allocated | Set `$env:VOICE_LAB_PORT = "7861"` (PowerShell) or `VOICE_LAB_PORT=7861` (bash), then rerun Compose. |
+| Docker container exits before the UI appears | Check `docker compose -f docker-compose.voice-lab.yml logs`; the common causes are a missing `HF_TOKEN`, unaccepted gated-model terms, or no disk space. |
+| Docker builds a CPU image but the machine has NVIDIA | Use the GPU overlay in the Docker section; the default image is CPU-only. |
 | `English-only custom-voice synthesis is not enabled` | Expected unless `TTS_ENABLE_CHATTERBOX=1`; enabling Chatterbox makes `engine=auto` use it for English. |
 | `engine_initialization_failed` | The selected engine could not load: missing/gated weights, a missing dependency, or an invalid model path. No fallback is attempted. |
 | `engine_unavailable` for mixed text | The selected engine is disabled or does not support mixed text. Under `auto`, mixed text now uses IndicF5; explicitly request `engine=chatterbox` to A/B test it. |
@@ -750,6 +818,10 @@ run.ps1              One-command install, model cache and Voice Lab launcher (Wi
 run.bat              Double-click/ExecutionPolicy-safe Windows wrapper for run.ps1
 app.py               Simple Gradio studio
 voice_lab_app.py     Voice Lab Gradio studio
+Dockerfile.voice-lab Voice Lab image (CPU default; CUDA build arg)
+docker-compose.voice-lab.yml       Voice Lab one-command deployment
+docker-compose.voice-lab.gpu.yml   NVIDIA GPU overlay for the Voice Lab
+docker/voice_lab_entrypoint.sh     Downloads gated weights, then starts the UI
 Dockerfile           API + agent image
 docker-compose.yml   Single-host API + agent deployment
 experiments/         Isolated Chatterbox-Telugu POC/evaluation reference

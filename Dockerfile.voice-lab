@@ -1,0 +1,75 @@
+# Local Voice Studio — Telugu Voice Lab container (IndicF5).
+#
+# CPU build (default):
+#   docker build -f Dockerfile.voice-lab -t local-voice-studio:voice-lab .
+#
+# NVIDIA CUDA build:
+#   docker build -f Dockerfile.voice-lab \
+#     --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128 \
+#     -t local-voice-studio:voice-lab-cuda .
+#
+# Model weights are NOT baked into the image. On first container start the
+# entrypoint downloads the gated IndicF5/Vocos files into the mounted
+# /models/huggingface volume using HF_TOKEN. Later starts run offline.
+FROM python:3.11-slim-bookworm
+
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+
+# hadolint ignore=DL3064
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/models/huggingface \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    TOKENIZERS_PARALLELISM=false \
+    GRADIO_ANALYTICS_ENABLED=False \
+    VOICE_LAB_HOST=0.0.0.0 \
+    VOICE_LAB_PORT=7860 \
+    VOICE_LAB_NO_BROWSER=1
+
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg libsndfile1 libgomp1 curl git tini \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install the accelerator-matched PyTorch wheel first. requirements.txt then
+# sees torch/torchaudio as already satisfied instead of pulling a second wheel.
+COPY requirements-core.txt requirements-api.txt requirements.txt ./
+# hadolint ignore=DL3013
+RUN python -m pip install --upgrade pip \
+    && python -m pip install --index-url "${TORCH_INDEX_URL}" \
+        torch==2.11.0 torchaudio==2.11.0 \
+    && python -m pip install -r requirements.txt \
+    && python -m pip check
+
+COPY tts ./tts
+COPY static ./static
+COPY app.py voice_lab_app.py ./
+COPY docker/voice_lab_entrypoint.sh /usr/local/bin/voice_lab_entrypoint.sh
+
+# Normalize line endings in case the checkout used CRLF on Windows.
+RUN sed -i 's/\r$//' /usr/local/bin/voice_lab_entrypoint.sh \
+    && chmod +x /usr/local/bin/voice_lab_entrypoint.sh
+
+# Build-time proof that PyTorch, F5/IndicF5, TorchCodec and the shared FFmpeg
+# libraries are all usable. TorchCodec's import is lazy, so decode a tiny WAV.
+RUN python -c "import os, tempfile, wave; import f5_tts, gradio, torch, torchaudio, torchcodec; from torchcodec.decoders import AudioDecoder; p=os.path.join(tempfile.gettempdir(), 'voice-lab-check.wav'); f=wave.open(p, 'wb'); f.setnchannels(1); f.setsampwidth(2); f.setframerate(24000); f.writeframes(b'\0\0' * 2400); f.close(); d=AudioDecoder(p).get_all_samples(); assert d.sample_rate == 24000 and d.data.shape[-1] == 2400; os.unlink(p); print('IndicF5/TorchCodec/FFmpeg runtime check OK')"
+
+RUN groupadd --gid 10001 app \
+    && useradd --create-home --uid 10001 --gid app app \
+    && mkdir -p /app/references /app/outputs /app/cache /app/data \
+       /app/experiments/chatterbox_telugu/models /models/huggingface \
+    && chown -R app:app /app /models
+
+USER 10001:10001
+
+EXPOSE 7860
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15m --retries=3 \
+    CMD ["curl", "-fsS", "http://127.0.0.1:7860/"]
+
+ENTRYPOINT ["tini", "--", "/usr/local/bin/voice_lab_entrypoint.sh"]

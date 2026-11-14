@@ -1,0 +1,59 @@
+# Telugu Voice Lab in Docker — CPU by default.
+#
+#   PowerShell:
+#     $env:HF_TOKEN = "hf_..."
+#     docker compose -f docker-compose.voice-lab.yml up --build
+#
+#   macOS/Linux:
+#     export HF_TOKEN=hf_...
+#     docker compose -f docker-compose.voice-lab.yml up --build
+#
+# NVIDIA GPU (Linux, or Docker Desktop with GPU support):
+#   docker compose -f docker-compose.voice-lab.yml \
+#     -f docker-compose.voice-lab.gpu.yml up --build
+#
+# HF_TOKEN is only needed for the first model download. The named volume
+# hf_models keeps the weights; the other voice_lab_* volumes keep references,
+# generated audio, history and cache. `docker compose ... down` keeps them;
+# `docker compose ... down -v` deletes them.
+services:
+  voice-lab:
+    build:
+      context: .
+      dockerfile: Dockerfile.voice-lab
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
+    image: local-voice-studio:voice-lab
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+      HF_HOME: /models/huggingface
+      VOICE_LAB_HOST: 0.0.0.0
+      VOICE_LAB_PORT: "7860"
+      VOICE_LAB_NO_BROWSER: "1"
+      TTS_DEVICE: cpu
+      TTS_PROFILE: ${TTS_PROFILE:-quality}
+      VOICE_LAB_FORCE_MODELS: ${VOICE_LAB_FORCE_MODELS:-0}
+      VOICE_LAB_SKIP_MODELS: ${VOICE_LAB_SKIP_MODELS:-0}
+    ports:
+      - "127.0.0.1:${VOICE_LAB_PORT:-7860}:7860"
+    volumes:
+      - hf_models:/models/huggingface
+      - voice_lab_references:/app/references
+      - voice_lab_outputs:/app/outputs
+      - voice_lab_cache:/app/cache
+      - voice_lab_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7860/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15m
+    stop_grace_period: 30s
+
+volumes:
+  hf_models:
+  voice_lab_references:
+  voice_lab_outputs:
+  voice_lab_cache:
+  voice_lab_data:

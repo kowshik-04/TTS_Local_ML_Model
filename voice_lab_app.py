@@ -351,7 +351,7 @@ def build() -> gr.Blocks:
 
 if __name__ == "__main__":
     build().queue(default_concurrency_limit=1).launch(
-        server_name="127.0.0.1",
+        server_name=os.environ.get("VOICE_LAB_HOST", "127.0.0.1"),
         server_port=int(os.environ.get("VOICE_LAB_PORT", "7860")),
         share=False,
         inbrowser=os.environ.get("VOICE_LAB_NO_BROWSER") is None,

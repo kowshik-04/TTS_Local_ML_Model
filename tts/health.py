@@ -49,6 +49,8 @@ def collect_health(output_dir: Path, engine=None) -> list[tuple[str, str, str]]:
         and _hf_snapshot_has("charactr/vocos-mel-24khz", ["config.yaml", "pytorch_model.bin"])
     )
     offline = os.environ.get("HF_HUB_OFFLINE") == "1"
+    host = os.environ.get("VOICE_LAB_HOST", "127.0.0.1")
+    port = os.environ.get("VOICE_LAB_PORT", "7860")
     return [
         ("Production engine", "IndicF5 (ai4bharat/IndicF5)", "info"),
         ("Model", "Loaded in memory" if loaded else "Not loaded (loads on first generation)",
@@ -62,6 +64,6 @@ def collect_health(output_dir: Path, engine=None) -> list[tuple[str, str, str]]:
          "ok" if _writable(output_dir) else "error"),
         ("Hugging Face offline mode", "Enabled (HF_HUB_OFFLINE=1)" if offline else "Not enabled",
          "ok" if offline else "warn"),
-        ("Network binding", "127.0.0.1 only, share=False, analytics disabled", "ok"),
+        ("Network binding", f"{host}:{port} · share=False, analytics disabled", "ok"),
         ("Python", f"{platform.python_version()} · {Path(sys.executable).parent.parent.name}", "info"),
     ]
